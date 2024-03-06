@@ -2,7 +2,11 @@ import socketserver
 import pymongo
 import json
 import re
+import bcrypt
+import os
+import hashlib
 from util.request import Request
+from util.auth import extract_credentials, validate_password
 from pymongo import MongoClient
 from bson.json_util import dumps
 
@@ -10,6 +14,8 @@ from bson.json_util import dumps
 mongo = MongoClient('mongo')
 db = mongo["cse312"]
 chat_collection = db["chat"]
+user_collection = db["users"]
+token_collection = db["tokens"]
 
 class MyTCPHandler(socketserver.BaseRequestHandler):
 
