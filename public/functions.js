@@ -54,23 +54,21 @@ function sendChat() {
     const chatTextBox = document.getElementById("chat-text-box");
     const message = chatTextBox.value;
     chatTextBox.value = "";
-    if (ws) {
-        // Using WebSockets
-        socket.send(JSON.stringify({'messageType': 'chatMessage', 'message': message}));
-    } else {
-        // Using AJAX
-        const request = new XMLHttpRequest();
-        request.onreadystatechange = function () {
-            if (this.readyState === 4 && this.status === 200) {
-                console.log(this.response);
-            }
+    const xsrfToken = document.querySelector('meta[name="xsrf-token"]').getAttribute('content');
+
+    const request = new XMLHttpRequest();
+    request.onreadystatechange = function () {
+        if (this.readyState === 4 && this.status === 200) {
+            console.log(this.response);
         }
-        const messageJSON = {"message": message};
-        request.open("POST", "/chat-messages");
-        request.send(JSON.stringify(messageJSON));
     }
-    chatTextBox.focus();
+    const messageJSON = {"message": message};
+    request.open("POST", "/chat-messages");
+    request.setRequestHeader('Content-Type', 'application/json');
+    request.setRequestHeader('X-XSRF-Token', xsrfToken);
+    request.send(JSON.stringify(messageJSON));
 }
+
 
 function updateChat() {
     const request = new XMLHttpRequest();
@@ -110,4 +108,21 @@ function welcome() {
 
     // use this line to start your video without having to click a button. Helpful for debugging
     // startVideo();
+}
+
+
+function logout() {
+    // Create a new request to the logout endpoint
+    var xhr = new XMLHttpRequest();
+    xhr.open("GET", "/logout", true);  // Assuming the logout is a GET request
+    xhr.onload = function() {
+        if (xhr.status == 200) {
+            // Optionally, redirect to the homepage or login page after successful logout
+            window.location.href = '/';
+        } else {
+            // Handle error (if any)
+            console.error("Logout failed:", xhr.responseText);
+        }
+    };
+    xhr.send();
 }

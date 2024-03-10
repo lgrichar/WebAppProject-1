@@ -5,8 +5,6 @@ class Router:
         self.routes = []
 
     def add_route(self, method, path, func):
-        # Prepend '^' to the path regex to match from the start
-        # and ensure it's interpreted as a regular expression
         regex = re.compile("^" + path)
         self.routes.append((method, regex, func))
 
@@ -14,7 +12,7 @@ class Router:
         for method, regex, func in self.routes:
             if request.method == method and regex.match(request.path):
                 return func(request)
-        # If no route matches, return a 404 response
+        # if no route, return a 404 response
         return self.not_found_response()
 
     def not_found_response(self):

@@ -8,6 +8,7 @@ class Request:
         self.http_version = ""
         self.headers = {}
         self.cookies = {}
+        self.xsrf_token = ""
         
         # decode the request from bytes to string
         request_str = request.decode()
