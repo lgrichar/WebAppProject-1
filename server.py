@@ -65,6 +65,8 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                 self.handle_get_chat_messages(request)
             elif request.path == '/logout':
                 self.handle_logout(request)
+            elif request.path == '/login':
+                self.handle_normal(request)
             else:
                 self.handle_normal(request)
         # else:
@@ -334,6 +336,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         self.redirect_to_home()
 
     def handle_login(self, request):
+        valid = False
         print("logging in")
         username, password = extract_credentials(request)
         user = user_collection.find_one({"username": username})
@@ -346,11 +349,13 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             self.set_auth_token_cookie(auth_token)
             request.xsrf_token = xsrf_token  # store xsrf in request
             print(username, " logged in xsrf: ", xsrf_token)
+            valid = True
             self.redirect_to_home()
-            return
-            # self.load_homepage(self, request)
         else:
             self.send_error(401, 'Unauthorized')
+            
+        if valid:
+            self.redirect_to_home()
 
 
     def handle_logout(self, request):
