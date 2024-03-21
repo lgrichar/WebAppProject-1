@@ -54,7 +54,7 @@ function sendChat() {
     const chatTextBox = document.getElementById("chat-text-box");
     const message = chatTextBox.value;
     chatTextBox.value = "";
-    const xsrfToken = document.querySelector('meta[name="xsrf-token"]').getAttribute('content');
+    const xsrfToken = document.getElementById('xsrf-token').value;
 
     const request = new XMLHttpRequest();
     request.onreadystatechange = function () {
@@ -62,10 +62,9 @@ function sendChat() {
             console.log(this.response);
         }
     }
-    const messageJSON = {"message": message};
+    const messageJSON = {"message": message, "xsrfToken": xsrfToken};
     request.open("POST", "/chat-messages");
     request.setRequestHeader('Content-Type', 'application/json');
-    request.setRequestHeader('X-XSRF-Token', xsrfToken);
     request.send(JSON.stringify(messageJSON));
 }
 

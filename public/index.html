@@ -27,7 +27,7 @@
 <div class="contents">
 
     <div class="chat">
-        <meta name="xsrf-token" content="{{xsrf_token}}">
+        
 
         <div id="chat-messages">
         </div>
@@ -39,6 +39,7 @@
                 Chat:
                 <input id="chat-text-box" type="text">
             </label>
+            <input type="hidden" id="xsrf-token" value="{{xsrf_token}}">
             <button id="chat-button" onclick="sendChat()">Send</button>
         </div>
 

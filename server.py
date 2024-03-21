@@ -69,47 +69,50 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                 self.handle_normal(request)
         # else:
         #     self.handle_normal(request)
-            
     
-    def handle_post_chat_messages(self, request): # put messages in db
+    def handle_post_chat_messages(self, request):  # put messages in db
         print("posting a message")
         try:
             data = json.loads(request.body.decode('utf-8'))  # decoding from bytes to str
             message = self.escape_html(data['message'])
         
-            # get XSRF token from the request
-            xsrf_token = data.get('xsrfToken', '')
-
-            # default is 'Guest'
+            # default username is 'Guest'
             username = "Guest"
-            valid_xsrf_token = False
-
+        
             # get and validate the auth token
             token = self.get_auth_token(request)
             if token:
                 token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
                 token_entry = token_collection.find_one({"token": token_hash})
-                if token_entry and 'xsrf_token' in token_entry and token_entry['xsrf_token'] == xsrf_token:
-                    username = token_entry['username']
-                    valid_xsrf_token = True  # XSRF token is valid
-
-            if not valid_xsrf_token:
-                self.send_error(403, 'Invalid XSRF token')
-                return
-
-            # inserting the chat message if the XSRF token is valid
+            
+                # if auth token is valid, check for XSRF token
+                if token_entry:
+                    xsrf_token = data['xsrfToken']
+                    # xsrf_token = request.headers.get('xsrfToken', '')
+                    print("post chat: xsrf found: ", xsrf_token)
+                
+                    # validate XSRF token
+                    if 'xsrf_token' in token_entry and token_entry['xsrf_token'] == xsrf_token:
+                        username = token_entry['username']
+                    else:
+                        # if XSRF token does not match, send a 403 error
+                        self.send_error(403, 'Invalid XSRF token')
+                        return
+        
+            # insert the chat message
             chat_message = {
                 "message": message,
                 "username": username,
                 "id": str(chat_collection.count_documents({}) + 1)
             }
-
+        
             chat_collection.insert_one(chat_message)  # insert document into db
             self.send_response(201, dumps(chat_message), 'application/json')
 
         except Exception as e:
             print("Error: ", e)  # debug
             self.send_error(500, 'Internal Server Error')
+            
     
     def handle_get_chat_messages(self, request): # retrieve msg from db
         print("getting chat messages")
@@ -192,9 +195,18 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                 content = content.replace('{{visits}}', str(visits))
                 
                  # put the XSRF token into the HTML content
-                xsrf_token = getattr(request, 'xsrf_token', None)
-                if xsrf_token:
-                    content = content.replace('{{xsrf_token}}', '{xsrf_token}')
+                token = self.get_auth_token(request)
+                if token:
+                    print("Found token: ", token)
+                    token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+                    token_entry = token_collection.find_one({"token": token_hash})
+                    print("Hashed token: ", token_hash)
+                    if token_entry:
+                        print("found token entry")
+                        xsrf_token = token_entry.get('xsrf_token', '')
+                        content = content.replace('{{xsrf_token}}', xsrf_token)
+                    else:
+                        print("couldn't find token entry")
                 
                 content = content.encode('utf-8')  # encode back to bytes
 
@@ -330,9 +342,13 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             token_hash = hashlib.sha256(auth_token.encode('utf-8')).hexdigest()
             xsrf_token = os.urandom(16).hex()  # random XSRF token
             token_collection.insert_one({"username": username, "token": token_hash, "xsrf_token": xsrf_token})
+            token_collection.update_one({"username": username}, {"$set": {"xsrf_token": xsrf_token}}, upsert=True) #stupid fix
             self.set_auth_token_cookie(auth_token)
             request.xsrf_token = xsrf_token  # store xsrf in request
+            print(username, " logged in xsrf: ", xsrf_token)
             self.redirect_to_home()
+            return
+            # self.load_homepage(self, request)
         else:
             self.send_error(401, 'Unauthorized')
 
@@ -369,6 +385,55 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                 break
         print("returning auth token")
         return token
+    
+    def load_homepage(self, request):
+        visits = None
+        print("loading homepage")
+        # get file path
+        filepath = 'public/index.html'
+        mime_type = 'text/html'
+            
+        try:
+            # start opening in bytes
+            with open(filepath, 'rb') as f:
+                content = f.read()
+            
+            if mime_type == 'text/html' and request.path == '/': # only if its index.html
+                content = content.decode('utf-8')  # decode to utf8
+                # update visits
+                visits = self.handle_visits(request)
+                content = content.replace('{{visits}}', str(visits))
+                
+                 # put the XSRF token into the HTML content
+                xsrf_token = getattr(request, 'xsrf_token', None)
+                if xsrf_token:
+                    print("adding xsrf token to page")
+                    content = content.replace('{{xsrf_token}}', str(xsrf_token))
+                
+                content = content.encode('utf-8')  # encode back to bytes
+
+            # create headers
+            headers = [
+                'HTTP/1.1 200 OK',
+                f'Content-Type: {mime_type}; charset=UTF-8' if mime_type.startswith('text/') else f'Content-Type: {mime_type}',
+                f'Content-Length: {len(content)}',
+                'X-Content-Type-Options: nosniff'
+            ]
+            
+            if visits is not None:
+                headers.append(f'Set-Cookie: visits={visits}; Path=/; Max-Age=14400')
+
+            headers.append('\r\n')
+
+            # send full header and body
+            self.request.sendall('\r\n'.join(headers).encode() + content)
+            pass
+
+        except FileNotFoundError:
+            self.send_error('404 Not Found', 'Content not found.')
+        except Exception as e:
+            print("Error: ",e) # debugging
+            self.send_error('500 Internal Server Error', f'An unexpected error occurred: {e}')
 
 def main():
     host = "0.0.0.0"
