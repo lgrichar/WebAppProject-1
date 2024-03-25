@@ -346,13 +346,19 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             xsrf_token = os.urandom(16).hex()  # random XSRF token
             token_collection.insert_one({"username": username, "token": token_hash, "xsrf_token": xsrf_token})
             token_collection.update_one({"username": username}, {"$set": {"xsrf_token": xsrf_token}}, upsert=True) #stupid fix
-            self.set_auth_token_cookie(auth_token)
+            # self.set_auth_token_cookie(auth_token)
+            cookie_value = f'authToken={auth_token}; HttpOnly; Max-Age=7200; Path=/'
             request.xsrf_token = xsrf_token  # store xsrf in request
             print(username, " logged in xsrf: ", xsrf_token)
             valid = True
-            self.redirect_to_home()
+            # self.redirect_to_home()
+            print("redirecting to home")
+            self.send_response(302, 'Success', additional_headers={'Location': '/', 'Set-Cookie': cookie_value})
+            
+            return
         else:
             self.send_error(401, 'Unauthorized')
+            return
             
         if valid:
             self.redirect_to_home()
