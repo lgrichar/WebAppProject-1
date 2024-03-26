@@ -300,9 +300,9 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
 
         
     def escape_html(self, text):
-        return text.replace(">", "&gt;") \
+        return text.replace("&", "&amp;") \
+                   .replace(">", "&gt;") \
                    .replace("<", "&lt;") \
-                   .replace("&", "&amp;") \
                    .replace('"', "&quot;") \
                    .replace("'", "&#x27;") 
                    
