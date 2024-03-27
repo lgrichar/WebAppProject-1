@@ -12,11 +12,13 @@ class Request:
         
         # decode the request from bytes to string
         request_str = request.decode()
+        #print("recieved request_str:", request_str)
 
         # split decoded request into lines
         lines = request_str.split('\r\n')
 
         # get method, path, and HTTP version
+        #print("headers:", lines[0])
         self.method, self.path, self.http_version = lines[0].split(' ')
 
         body_started = False
