@@ -33,6 +33,7 @@ def parse_multipart(request):
         content_disposition = part_headers.get('Content-Disposition')
         name_match = re.search(r'name="([^"]+)"', content_disposition)
         if not name_match:
+            print("No name found from header")
             raise ValueError('No name in Content-Disposition header')
 
         name = name_match.group(1)
