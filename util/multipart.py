@@ -1,17 +1,30 @@
 import re
 
+class MultipartData:
+    def __init__(self, boundary, parts):
+        self.boundary = boundary
+        self.parts = parts
+
+class Part:
+    def __init__(self, headers, name, content):
+        self.headers = headers
+        self.name = name
+        self.content = content
+
 def parse_multipart(request):
     # get boundary from content type header
     content_type = request.headers.get('Content-Type', '')
+    #print("headers:", request.headers)
+    #print("content type:",content_type)
     boundary_match = re.search(r'boundary=(.*)', content_type)
     if not boundary_match:
-        print("error: couldn't find boundary")
-        raise ValueError('header doesnt have boundary')
+        print("error: couldn't find boundary")  
     
-    boundary = boundary_match.group(1)
+    boundary = "--" + boundary_match.group(1)
+    actualBoundary = boundary_match.group(1)
 
-    if not boundary.startswith('--'):
-        boundary = '--' + boundary
+    #if not boundary.startswith('--'):
+    #    boundary = '--' + boundary
 
     # split the body into parts
     parts = request.body.split(boundary.encode())[1:-1]
@@ -33,18 +46,12 @@ def parse_multipart(request):
         content_disposition = part_headers.get('Content-Disposition')
         name_match = re.search(r'name="([^"]+)"', content_disposition)
         if not name_match:
-            print("No name found from header")
-            raise ValueError('No name in Content-Disposition header')
-
+            print("no name found from header")
+            
         name = name_match.group(1)
 
-        parsed_parts.append({
-            'headers': part_headers,
-            'name': name,
-            'content': content_part 
-        })
+        # add the part as a Part object
+        parsed_parts.append(Part(part_headers, name, content_part))
 
-    return {
-        'boundary': boundary,
-        'parts': parsed_parts
-    }
+    # return a MultipartData object
+    return MultipartData(actualBoundary, parsed_parts)
