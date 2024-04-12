@@ -78,17 +78,15 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
     def handle_post_image_messages(self, request):
         print("handling post image")
         try:
-            print("made it to try statement")
+            # print("made it to try statement")
             boundary = request.headers.get('Content-Type', '').split('boundary=')[1]
             final_boundary = f"--{boundary}--\r\n".encode()
             received_data = b''
             received_data += request.body # getting initial data
-            count = 0
+            
+            #count = 0
             while not received_data.endswith(final_boundary): # buffering all the data before parsing and storing in db
-                print("recieving more data", count)
-                if(count == 1):
-                    print(received_data)
-                count+=1
+                #print("recieving more data", count)
                 packet = self.request.recv(2048)
                 if not packet:
                     print("breaking")
@@ -97,7 +95,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                 received_data += packet
                 
             request.body = received_data
-            print("request is now",request)
+            #print("request is now",request)
         
             username = "Guest"
 
@@ -121,19 +119,29 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                 print("going through parts")
                 if part.name == 'upload':
                     print("in upload part")
-                    filename = f"image{len(os.listdir('public/image')) + 1}.jpg"
-                    filepath = os.path.join('public/image/', filename)
+                    
+                    file_extension = 'jpg' if part.content[:3] == b'\xFF\xD8\xFF' else 'mp4'
+                    media_tag = '<img' if file_extension == 'jpg' else '<video controls'
+
+                    # Determine the new filename
+                    file_number = len(os.listdir('public/media')) + 1
+                    filename = f"media{file_number}.{file_extension}"
+                    filepath = os.path.join('public/media/', filename)
+                        
+                    file_number = len(os.listdir('public/media')) + 1
+                    filename = f"media{file_number}.{file_extension}"
+                    filepath = os.path.join('public/media/', filename)
 
                     # save image content to a file
                     with open(filepath, 'wb') as f:
                         print("writing file contents")
                         f.write(part.content)
 
-            # generate chat message with image
-            chat_message = f'<img src="public/image/{filename}" alt="Uploaded image"/>'
-            
-            # insert chat message/image into database
-            chat_collection.insert_one({"message": chat_message, "username": username, "id": str(chat_collection.count_documents({}) + 1)})
+                    # generate chat message with image
+                    chat_message = f'{media_tag} src="/public/media/{filename}" alt="Uploaded {file_extension}"/>'
+
+                    # insert chat message/image into database
+                    chat_collection.insert_one({"message": chat_message, "username": username, "id": str(chat_collection.count_documents({}) + 1)})
             self.send_response(302, 'Redirect', additional_headers={'Location': '/'})
         
         except Exception as e:
@@ -255,12 +263,21 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
     def handle_normal(self, request):
         visits = None
         print("normal hanlding")
+        
+        base_directory = 'public'
+        
         # get file path
         if request.path == '/': # index.html page
             filepath = 'public/index.html'
         else:
-            filepath = request.path.lstrip('/') # example /public/image/kitten.jpg
+            safe_filepath = os.path.normpath(request.path.lstrip('/')) # example /public/image/kitten.jpg
+            filepath = safe_filepath
             print("requested filepath: ",filepath) 
+            
+            if not filepath.startswith(base_directory):
+                print("Forbidden: ", filepath)
+                self.send_error(403, 'Forbidden')
+                return
             
         # get MIME type
         if filepath.endswith('.html'):
