@@ -271,10 +271,10 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             filepath = 'public/index.html'
         else:
             safe_filepath = os.path.normpath(request.path.lstrip('/')) # example /public/image/kitten.jpg
-            filepath = safe_filepath
+            filepath = safe_filepath # sanitizing filepath to prevent directory traversal
             print("requested filepath: ",filepath) 
             
-            if not filepath.startswith(base_directory):
+            if not filepath.startswith(base_directory): # directory traversal may have occured
                 print("Forbidden: ", filepath)
                 self.send_error(403, 'Forbidden')
                 return
@@ -292,6 +292,8 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             mime_type = 'image/png'
         elif filepath.endswith('.ico'):
             mime_type = 'image/x-icon'
+        elif filepath.endswith('.mp4'):
+            mime_type = 'video/mp4'
         else:
             mime_type = 'text/plain'
             
@@ -339,6 +341,9 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             self.request.sendall('\r\n'.join(headers).encode() + content)
             pass
 
+        except BrokenPipeError:
+            print("Broken Pipe error, content not fully sent yet")
+            self.send_response(302, 'Broken Pipe Error', additional_headers={'Location': '/'})
         except FileNotFoundError:
             self.send_error('404 Not Found', 'Content not found.')
         except Exception as e:
