@@ -7,6 +7,7 @@ import os
 import hashlib
 from util.request import Request
 from util.auth import extract_credentials, validate_password
+from util.multipart import parse_multipart
 from pymongo import MongoClient
 from bson.json_util import dumps
 
@@ -50,6 +51,8 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         if request.method == 'POST' :
             if request.path == '/chat-messages':
                 self.handle_post_chat_messages(request)
+            if request.path == '/image-upload':
+                self.handle_post_image_messages(request)
             if request.path == '/login':
                 self.handle_login(request)
             if request.path == '/register':
@@ -72,9 +75,77 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         # else:
         #     self.handle_normal(request)
     
+    def handle_post_image_messages(self, request):
+        print("handling post image")
+        try:
+            print("made it to try statement")
+            boundary = request.headers.get('Content-Type', '').split('boundary=')[1]
+            final_boundary = f"--{boundary}--\r\n".encode()
+            received_data = b''
+            received_data += request.body # getting initial data
+            count = 0
+            while not received_data.endswith(final_boundary): # buffering all the data before parsing and storing in db
+                print("recieving more data", count)
+                if(count == 1):
+                    print(received_data)
+                count+=1
+                packet = self.request.recv(2048)
+                if not packet:
+                    print("breaking")
+                    print("received data:",received_data)
+                    break
+                received_data += packet
+                
+            request.body = received_data
+            print("request is now",request)
+        
+            username = "Guest"
+
+            # Security STUFFFFF
+            # get and validate the auth token
+            token = self.get_auth_token(request)
+            if token:
+                print("getting token")
+                token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+                token_entry = token_collection.find_one({"token": token_hash})
+            
+                # if auth token is valid, check for XSRF token
+                if token_entry:
+                    print("found token")
+                    username = token_entry['username']
+            
+            print("parsing data")
+            parsed_data = parse_multipart(request)
+
+            for part in parsed_data.parts:
+                print("going through parts")
+                if part.name == 'upload':
+                    print("in upload part")
+                    filename = f"image{len(os.listdir('public/image')) + 1}.jpg"
+                    filepath = os.path.join('public/image/', filename)
+
+                    # save image content to a file
+                    with open(filepath, 'wb') as f:
+                        print("writing file contents")
+                        f.write(part.content)
+
+            # generate chat message with image
+            chat_message = f'<img src="public/image/{filename}" alt="Uploaded image"/>'
+            
+            # insert chat message/image into database
+            chat_collection.insert_one({"message": chat_message, "username": username, "id": str(chat_collection.count_documents({}) + 1)})
+            self.send_response(302, 'Redirect', additional_headers={'Location': '/'})
+        
+        except Exception as e:
+            print("Error: ", e) #debugging
+            self.send_error(500, 'Internal Server Error')
+    
     def handle_post_chat_messages(self, request):  # put messages in db
         print("posting a message")
         try:
+            content_type = request.headers.get('Content-Type', '')
+            
+            
             data = json.loads(request.body.decode('utf-8'))  # decoding from bytes to str
             message = self.escape_html(data['message'])
         
@@ -114,8 +185,30 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         except Exception as e:
             print("Error: ", e)  # debug
             self.send_error(500, 'Internal Server Error')
-            
-    
+
+    def validate_xsrf_token(self, request):
+        xsrf_token = request.headers.get('X-XSRF-Token')  # Assuming XSRF token is sent in custom header
+        if not xsrf_token:
+            return False  # No XSRF token provided
+
+        token = self.get_auth_token(request)
+        if token:
+            token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+            token_entry = token_collection.find_one({"token": token_hash})
+            return token_entry and 'xsrf_token' in token_entry and token_entry['xsrf_token'] == xsrf_token
+
+        return False  # No valid auth token or XSRF token mismatch
+
+    def get_username_from_token(self, request):
+        username = "Guest"  # default username
+        token = self.get_auth_token(request)
+        if token:
+            token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+            token_entry = token_collection.find_one({"token": token_hash})
+            if token_entry:
+                username = token_entry['username']
+        return username
+        
     def handle_get_chat_messages(self, request): # retrieve msg from db
         print("getting chat messages")
         try:

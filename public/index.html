@@ -41,7 +41,18 @@
             </label>
             <input type="hidden" id="xsrf-token" value="{{xsrf_token}}">
             <button id="chat-button" onclick="sendChat()">Send</button>
+
+            <form action="/image-upload" id="image-chat-form" method="post" enctype="multipart/form-data">
+                <br/>
+                <label for="form-file">Upload Image: </label>
+                <input id="form-file" type="file" name="upload">
+                <br/>
+                <input type="submit" value="Post">
+            </form>
         </div>
+
+    
+
 
     </div>
 
