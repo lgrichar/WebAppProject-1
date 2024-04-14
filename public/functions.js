@@ -73,11 +73,15 @@ function updateChat() {
     const request = new XMLHttpRequest();
     request.onreadystatechange = function () {
         if (this.readyState === 4 && this.status === 200) {
-            clearChat();
-            const messages = JSON.parse(this.response);
-            for (const message of messages) {
-                addMessageToChat(message);
+            if (this.status == 200) {
+                clearChat();
+                const messages = JSON.parse(this.response);
+                for (const message of messages) {
+                    addMessageToChat(message);
+                }
             }
+            const delay = (this.status == (200 || 206)) ? 20000 : 5000;
+            setTimeout(updateChat, delay);
         }
     }
     request.open("GET", "/chat-messages");
@@ -102,7 +106,7 @@ function welcome() {
     } else {
         const videoElem = document.getElementsByClassName('video-chat')[0];
         videoElem.parentElement.removeChild(videoElem);
-        setInterval(updateChat, 5000);
+        updateChat();
     }
 
     // use this line to start your video without having to click a button. Helpful for debugging
