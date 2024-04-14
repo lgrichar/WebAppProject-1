@@ -31,9 +31,9 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         print(received_data)
         print("--- end of data ---\n\n")
         request = Request(received_data)
-        print(request.headers)
-        print(request.path)
-        print(request.body)
+        #print(request.headers)
+        #print(request.path)
+        #print(request.body)
 
         if not request:
             return
@@ -76,7 +76,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         #     self.handle_normal(request)
     
     def handle_post_image_messages(self, request):
-        print("handling post image")
+        #print("handling post image")
         try:
             # print("made it to try statement")
             boundary = request.headers.get('Content-Type', '').split('boundary=')[1]
@@ -89,8 +89,8 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                 #print("recieving more data", count)
                 packet = self.request.recv(4096)
                 if not packet:
-                    print("breaking")
-                    print("received data:",received_data)
+                    #print("breaking")
+                    #print("received data:",received_data)
                     break
                 received_data += packet
                 
@@ -103,22 +103,22 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             # get and validate the auth token
             token = self.get_auth_token(request)
             if token:
-                print("getting token")
+                #print("getting token")
                 token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
                 token_entry = token_collection.find_one({"token": token_hash})
             
                 # if auth token is valid, check for XSRF token
                 if token_entry:
-                    print("found token")
+                    #print("found token")
                     username = token_entry['username']
             
-            print("parsing data")
+            #print("parsing data")
             parsed_data = parse_multipart(request)
 
             for part in parsed_data.parts:
-                print("going through parts")
+                #print("going through parts")
                 if part.name == 'upload':
-                    print("in upload part")
+                    #print("in upload part")
                     
                     file_extension = 'jpg' if part.content[:3] == b'\xFF\xD8\xFF' else 'mp4'
                     media_tag = '<img width="400"' if file_extension == 'jpg' else '<video width = \'400\' controls autoplay muted>'
@@ -133,7 +133,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                     filepath = os.path.join('public/media/', filename)
 
                     with open(filepath, 'wb') as f:
-                        print("writing file contents")
+                        #print("writing file contents")
                         f.write(part.content)
 
                     # generate chat message with image or video
@@ -172,7 +172,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                 if token_entry:
                     xsrf_token = data['xsrfToken']
                     # xsrf_token = request.headers.get('xsrfToken', '')
-                    print("post chat: xsrf found: ", xsrf_token)
+                    #print("post chat: xsrf found: ", xsrf_token)
                 
                     # validate XSRF token
                     if 'xsrf_token' in token_entry and token_entry['xsrf_token'] == xsrf_token:
@@ -220,7 +220,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         return username
         
     def handle_get_chat_messages(self, request): # retrieve msg from db
-        print("getting chat messages")
+        #print("getting chat messages")
         try:
             messages = list(chat_collection.find({}, {'_id': 0})) # this was throwing not serializable errors for some reason
             response_body = dumps(messages)
@@ -234,7 +234,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             self.send_error(500, 'Broken Pipe Error: Client closed TCP connection')
             
     def handle_delete_chat_message(self, request, message_id):
-        print("deleting a message")
+        #print("deleting a message")
         # get the auth token from the request
         token = self.get_auth_token(request)
         if not token:
@@ -267,7 +267,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
     
     def handle_normal(self, request):
         visits = None
-        print("normal hanlding")
+        #print("normal hanlding")
         
         base_directory = 'public'
         
@@ -277,10 +277,10 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         else:
             safe_filepath = os.path.normpath(request.path.lstrip('/')) # example /public/image/kitten.jpg
             filepath = safe_filepath # sanitizing filepath to prevent directory traversal
-            print("requested filepath: ",filepath) 
+            #print("requested filepath: ",filepath) 
             
             if not filepath.startswith(base_directory): # directory traversal may have occured
-                print("Forbidden: ", filepath)
+                #print("Forbidden: ", filepath)
                 self.send_error(403, 'Forbidden')
                 return
             
@@ -305,49 +305,73 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         try:
             # start opening in bytes
             with open(filepath, 'rb') as f:
+                f.seek(0, os.SEEK_END)
+                file_size = f.tell()
+                f.seek(0)
                 content = f.read()
             
-            if mime_type == 'text/html' and request.path == '/': # only if its index.html
-                content = content.decode('utf-8')  # decode to utf8
-                # update visits
-                visits = self.handle_visits(request)
-                content = content.replace('{{visits}}', str(visits))
+                if mime_type == 'text/html' and request.path == '/': # only if its index.html
+                    content = content.decode('utf-8')  # decode to utf8
+                    # update visits
+                    visits = self.handle_visits(request)
+                    content = content.replace('{{visits}}', str(visits))
                 
-                 # put the XSRF token into the HTML content
-                token = self.get_auth_token(request)
-                if token:
-                    print("Found token: ", token)
-                    token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
-                    token_entry = token_collection.find_one({"token": token_hash})
-                    print("Hashed token: ", token_hash)
-                    if token_entry:
-                        print("found token entry")
-                        xsrf_token = token_entry.get('xsrf_token', '')
-                        content = content.replace('{{xsrf_token}}', xsrf_token)
-                    else:
-                        print("couldn't find token entry")
+                     # put the XSRF token into the HTML content
+                    token = self.get_auth_token(request)
+                    if token:
+                        #print("Found token: ", token)
+                        token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+                        token_entry = token_collection.find_one({"token": token_hash})
+                        #print("Hashed token: ", token_hash)
+                        if token_entry:
+                            #print("found token entry")
+                            xsrf_token = token_entry.get('xsrf_token', '')
+                            content = content.replace('{{xsrf_token}}', xsrf_token)
+                        else:
+                            print("couldn't find token entry")
                 
-                content = content.encode('utf-8')  # encode back to bytes
+                    content = content.encode('utf-8')  # encode back to bytes
 
-            # create headers
-            headers = [
-                'HTTP/1.1 200 OK',
-                f'Content-Type: {mime_type}; charset=UTF-8' if mime_type.startswith('text/') else f'Content-Type: {mime_type}',
-                f'Content-Length: {len(content)}',
-                'X-Content-Type-Options: nosniff'
-            ]
+                # if this is a range request
+                range_header = request.headers.get('Range', '')
+                if range_header:
+                    print("range header found!")
+                    _, range_value = range_header.split('=')
+                    start_str, end_str = range_value.split('-')
+                    start = int(start_str) if start_str else 0
+                    end = int(end_str) if end_str else file_size - 1
             
-            if visits is not None:
-                headers.append(f'Set-Cookie: visits={visits}; Path=/; Max-Age=14400')
+                    f.seek(start)
+                    content = f.read(end - start + 1)
+            
+                    headers = [
+                        'HTTP/1.1 206 Partial Content',
+                        f'Content-Type: {mime_type}; charset=UTF-8' if mime_type.startswith('text/') else f'Content-Type: {mime_type}',
+                        f'Content-Length: {end - start + 1}',
+                        f'Content-Range: bytes {start}-{end}/{file_size}',
+                        'Accept-Ranges: bytes',
+                        'X-Content-Type-Options: nosniff',
+                    ]
+                else:
+                    # create headers
+                    headers = [
+                        'HTTP/1.1 200 OK',
+                        f'Content-Type: {mime_type}; charset=UTF-8' if mime_type.startswith('text/') else f'Content-Type: {mime_type}',
+                        f'Content-Length: {len(content)}',
+                        'X-Content-Type-Options: nosniff'
+                    ]
+            
+                if visits is not None:
+                    headers.append(f'Set-Cookie: visits={visits}; Path=/; Max-Age=14400')
                 
-            if mime_type == 'video/mp4':
-                headers.append(f'Cache-Control: public, max-age=31536000')
+                if mime_type == 'video/mp4':
+                    headers.append(f'Cache-Control: public, max-age=31536000')
 
-            headers.append('\r\n')
+                headers.append('\r\n')
 
-            # send full header and body
-            self.request.sendall('\r\n'.join(headers).encode() + content)
-            pass
+                # send full header and body
+                self.request.sendall('\r\n'.join(headers).encode() + content)
+                pass
 
         except BrokenPipeError as e:
             print("Error: ",e) # debugging
@@ -360,7 +384,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
     
 
     def send_error(self, status, message):
-        print("sending error")
+        #print("sending error")
         enc_msg = message.encode('utf-8')  #encode message in utf8 to bytes
         response_headers = [
             f'HTTP/1.1 {status}',
@@ -373,7 +397,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         self.request.sendall(response)
 
     def handle_visits(self, request):
-        print("handling visits")
+        #print("handling visits")
         # get the auth token from the request
         token = self.get_auth_token(request)
         username = None
@@ -396,11 +420,11 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                 visits = 1
         else:
             visits = 1 # more default
-        print("returning visits")
+        #print("returning visits")
         return visits
     
     def send_response(self, status_code, content, content_type='text/plain', additional_headers=None):
-        print("sending response")
+        #print("sending response")
         if isinstance(content, str):  # must be in bytes
             content = content.encode('utf-8')
 
@@ -430,7 +454,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                    .replace("'", "&#x27;") 
                    
     def handle_get_single_chat_message(self, message_id):
-        print("getting single message")
+        #print("getting single message")
         try:
             id = int(message_id)
             message = chat_collection.find_one({"id": str(id)}, {'_id': 0}) # avoid json serializable error
@@ -446,7 +470,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             self.send_error(500, 'Internal Server Error')
     
     def handle_registration(self, request):
-        print("registering")
+        #print("registering")
         username, password = extract_credentials(request)
         if not validate_password(password):
             self.send_error(400, 'Bad Password')
@@ -460,7 +484,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
 
     def handle_login(self, request):
         valid = False
-        print("logging in")
+        #print("logging in")
         username, password = extract_credentials(request)
         user = user_collection.find_one({"username": username})
         if user and bcrypt.checkpw(password.encode('utf-8'), user['password']):
@@ -472,10 +496,10 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             # self.set_auth_token_cookie(auth_token)
             cookie_value = f'authToken={auth_token}; HttpOnly; Max-Age=7200; Path=/'
             request.xsrf_token = xsrf_token  # store xsrf in request
-            print(username, " logged in xsrf: ", xsrf_token)
+            #print(username, " logged in xsrf: ", xsrf_token)
             valid = True
             # self.redirect_to_home()
-            print("redirecting to home")
+            #print("redirecting to home")
             self.send_response(302, 'Success', additional_headers={'Location': '/', 'Set-Cookie': cookie_value})
             
             return
@@ -488,7 +512,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
 
 
     def handle_logout(self, request):
-        print("logging out")
+        #print("logging out")
         token = self.get_auth_token(request)
         if token:
             token_collection.delete_one({"token": hashlib.sha256(token.encode('utf-8')).hexdigest()})
@@ -496,33 +520,33 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         self.redirect_to_home()
         
     def redirect_to_home(self):
-        print("redirecting to home")
+        #print("redirecting to home")
         self.send_response(302, 'Success', additional_headers={'Location': '/'})
 
     def set_auth_token_cookie(self, token):
-        print("setting auth token")
+        #print("setting auth token")
         cookie_value = f'authToken={token}; HttpOnly; Max-Age=7200; Path=/'
         self.send_response(200, '', 'text/plain', {'Set-Cookie': cookie_value})
 
     def clear_auth_token_cookie(self):
-        print("clearing auth token")
+        #print("clearing auth token")
         cookie_value = 'authToken=deleted; HttpOnly; Max-Age=0; Path=/'
         self.send_response(200, '', 'text/plain', {'Set-Cookie': cookie_value})
 
     def get_auth_token(self, request):
-        print("getting auth token")
+        #print("getting auth token")
         cookies = request.headers.get('Cookie', '')
         token = None
         for cookie in cookies.split(';'):
             if 'authToken' in cookie:
                 token = cookie.split('=')[1].strip()
                 break
-        print("returning auth token")
+        #print("returning auth token")
         return token
     
     def load_homepage(self, request):
         visits = None
-        print("loading homepage")
+        #print("loading homepage")
         # get file path
         filepath = 'public/index.html'
         mime_type = 'text/html'

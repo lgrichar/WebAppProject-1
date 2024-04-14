@@ -80,7 +80,7 @@ function updateChat() {
                     addMessageToChat(message);
                 }
             }
-            const delay = (this.status == 200) ? 15000 : 5000;
+            const delay = (this.status == (200 || 206)) ? 20000 : 5000;
             setTimeout(updateChat, delay);
         }
     }
