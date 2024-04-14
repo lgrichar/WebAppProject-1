@@ -334,6 +334,9 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             
             if visits is not None:
                 headers.append(f'Set-Cookie: visits={visits}; Path=/; Max-Age=14400')
+                
+            #if mime_type == 'video/mp4':
+            #    headers.append(f'Cache-Control: no-cache')
 
             headers.append('\r\n')
 
