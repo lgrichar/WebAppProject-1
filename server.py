@@ -87,7 +87,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             #count = 0
             while not received_data.endswith(final_boundary): # buffering all the data before parsing and storing in db
                 #print("recieving more data", count)
-                packet = self.request.recv(2048)
+                packet = self.request.recv(4096)
                 if not packet:
                     print("breaking")
                     print("received data:",received_data)
@@ -121,7 +121,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                     print("in upload part")
                     
                     file_extension = 'jpg' if part.content[:3] == b'\xFF\xD8\xFF' else 'mp4'
-                    media_tag = '<img' if file_extension == 'jpg' else '<video controls'
+                    media_tag = '<img width="400"' if file_extension == 'jpg' else '<video width = \'400\' controls autoplay muted>'
 
                     # Determine the new filename
                     file_number = len(os.listdir('public/media')) + 1
@@ -132,13 +132,15 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                     filename = f"media{file_number}.{file_extension}"
                     filepath = os.path.join('public/media/', filename)
 
-                    # save image content to a file
                     with open(filepath, 'wb') as f:
                         print("writing file contents")
                         f.write(part.content)
 
-                    # generate chat message with image
-                    chat_message = f'{media_tag} src="/public/media/{filename}" alt="Uploaded {file_extension}"/>'
+                    # generate chat message with image or video
+                    if media_tag == '<video width = \'400\' controls autoplay muted>':
+                        chat_message = f'{media_tag}<source src="/public/media/{filename}" type="video/mp4" alt="Uploaded {file_extension}"/></video>'
+                    else:
+                        chat_message = f'{media_tag} src="/public/media/{filename}" type="image/jpeg" alt="Uploaded {file_extension}"/></img>'
 
                     # insert chat message/image into database
                     chat_collection.insert_one({"message": chat_message, "username": username, "id": str(chat_collection.count_documents({}) + 1)})
@@ -227,6 +229,9 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         except Exception as e:
             print("Error: ",e) # debugging
             self.send_error(500, 'Internal Server Error')
+        except BrokenPipeError as e:
+            print("Error: ",e) # debugging
+            self.send_error(500, 'Broken Pipe Error: Client closed TCP connection')
             
     def handle_delete_chat_message(self, request, message_id):
         print("deleting a message")
@@ -335,8 +340,8 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             if visits is not None:
                 headers.append(f'Set-Cookie: visits={visits}; Path=/; Max-Age=14400')
                 
-            #if mime_type == 'video/mp4':
-            #    headers.append(f'Cache-Control: no-cache')
+            if mime_type == 'video/mp4':
+                headers.append(f'Cache-Control: public, max-age=31536000')
 
             headers.append('\r\n')
 
@@ -344,9 +349,9 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             self.request.sendall('\r\n'.join(headers).encode() + content)
             pass
 
-        except BrokenPipeError:
-            print("Broken Pipe error, content not fully sent yet")
-            self.send_response(302, 'Broken Pipe Error', additional_headers={'Location': '/'})
+        except BrokenPipeError as e:
+            print("Error: ",e) # debugging
+            #self.send_error(500, 'Broken Pipe Error: Client closed TCP connection')
         except FileNotFoundError:
             self.send_error('404 Not Found', 'Content not found.')
         except Exception as e:
