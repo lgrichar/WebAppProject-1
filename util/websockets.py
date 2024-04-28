@@ -21,7 +21,7 @@ def parse_ws_frame(frame):
     if len(frame) < 2:
         print("ERROR: Frame is less than 2 bytes in length")
     
-    print("frame recieved to parse:",frame)
+    #print("frame recieved to parse:",frame)
     fin_bit = (frame[0] & 0x80) >> 7 # getting fin bit, AND mask and then change position
     opcode = frame[0] & 0x0F # 0001 for text, 0010 for binary, 1000 to close the connection, 0000 for continuation frame
     mask_bit = (frame[1] & 0x80) >> 7 # mask bit, if 1 must unmask
@@ -49,18 +49,18 @@ def parse_ws_frame(frame):
         if len(frame) < header_size + 4:
             print("ERROR: incomplete masking key")
         masking_key = frame[header_size:header_size + 4]
-        print("mask found")
+        #print("mask found")
         header_size += 4
     else:
         masking_key = None
 
-    print("payload length:", payload_length)
-    print("header size", header_size)
+    #print("payload length:", payload_length)
+    #print("header size", header_size)
     total_frame_size = header_size + payload_length
-    if len(frame) < total_frame_size:
-        print("ERROR: incomplete frame data")
-        print("length of recieved frame is ", len(frame))
-        print("length of total frame", total_frame_size)
+    #if len(frame) < total_frame_size:
+        #print("ERROR: incomplete frame data")
+        #print("length of recieved frame is ", len(frame))
+        #print("length of total frame", total_frame_size)
 
     
     payload_start = header_size
@@ -68,13 +68,13 @@ def parse_ws_frame(frame):
     if hasMask:
         decoded_payload = bytearray()
         for i in range(payload_length):
-            print("i =", i)
-            print("start =", payload_start)
-            print("end =", (payload_start + payload_length))
+            #print("i =", i)
+            #print("start =", payload_start)
+            #print("end =", (payload_start + payload_length))
             frame_index = payload_start + i
             mask_index = i % 4
             # need to do them byte by byte, not in groups of 4 since it can give oob error
-            print("mask index", mask_index)
+            #print("mask index", mask_index)
             decoded_byte = frame[frame_index] ^ masking_key[mask_index]
             decoded_payload.append(decoded_byte)
     else:
