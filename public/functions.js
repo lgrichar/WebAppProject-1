@@ -11,8 +11,8 @@ function initWS() {
         const messageType = message.messageType
         if(messageType === 'chatMessage'){
             addMessageToChat(message);
-        } else if (data.messageType === 'userListUpdate') {
-            updateUserList(data);
+        } else if (messageType === 'userListUpdate') {
+            updateUserList(message);
         } else{
             // send message to WebRTC
             processMessageAsWebRTC(message, messageType);
@@ -20,18 +20,17 @@ function initWS() {
     }
 }
 
-function updateUserList(data) {
+function updateUserList(message) {
     const userList = document.getElementById('user-list');
-    if (data.action === 'login') {
-        const userItem = document.createElement('li');
-        userItem.textContent = data.username;
-        userItem.id = 'user-' + data.username;
-        userList.appendChild(userItem);
-    } else if (data.action === 'logout') {
-        const userItem = document.getElementById('user-' + data.username);
-        if (userItem) {
-            userList.removeChild(userItem);
-        }
+    userList.innerHTML = '';
+
+    if (message.action === 'update') {
+        message.users.forEach(username => {
+            const userItem = document.createElement('li');
+            userItem.textContent = username;
+            userItem.id = 'user-' + username;
+            userList.appendChild(userItem);
+        });
     }
 }
 

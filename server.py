@@ -88,13 +88,13 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             print("no key found")
             self.send_error(400, 'bad request: no Sec-WebSocket-Key')
             return
-        print("ket found", key)
+        #print("ket found", key)
     
         username = self.get_username_from_token(request)
         self.username = username
     
         accept_val = compute_accept(key)
-        print("doing accept_val", accept_val)
+        #print("doing accept_val", accept_val)
         response_headers = [
             'HTTP/1.1 101 Switching Protocols',
             'Upgrade: websocket',
@@ -102,24 +102,25 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             f'Sec-WebSocket-Accept: {accept_val}',
             '\r\n'
         ]
-        print("sending handshake response")
-        print(response_headers)
+        #print("sending handshake response")
+        #print(response_headers)
         self.request.sendall('\r\n'.join(response_headers).encode())
 
         # after handshake, enter a loop to read and handle WebSocket frames
         self.handle_websocket_communication(username)
     
     def handle_websocket_communication(self, username):
-        print("handlding websocket communication")
+        #print("handlding websocket communication")
         active_connections.append(self)
-        print("active_connections now contains", active_connections)
+        #print("active_connections now contains", active_connections)
         buffer = bytearray()
         message_buffer = bytearray()
         current_opcode = None
-        
+        self.update_user_list()
         try:
             while active_connections.__contains__(self): #maybe should be true, the goal of this is to go while the connection is active
-                print("getting more data")
+                #print("getting more data")
+                self.update_user_list()
                 data = self.request.recv(4096) # get more bytes from socket
                 if not data:
                     break  # no more data connection closed
@@ -128,31 +129,31 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
 
                 while True:
                     if len(buffer) < 2:  # not enough data to read even the smallest frame header
-                        print("buffer too small")
+                        #print("buffer too small")
                         break
 
                     length = buffer[1] & 0x7F
-                    print("length:", length)
+                    #print("length:", length)
                     if length == 126:
-                        print("length is 126")
+                        #print("length is 126")
                         if len(buffer) < 4:
                             break  # not enough data for extended length
                         length = int.from_bytes(buffer[2:4], byteorder='big')
                         header_size = 8
                     elif length == 127:
-                        print("length is 127")
+                        #print("length is 127")
                         if len(buffer) < 10:
                             break # wont be able to read ahead not enough data
                         length = int.from_bytes(buffer[2:10], byteorder='big')
                         header_size = 14
                     else:
-                        print("header size 6") # add masking byte
+                        #print("header size 6") # add masking byte
                         header_size = 6
 
                     total_size = header_size + length
-                    print("total size", total_size)
+                    #print("total size", total_size)
                     if len(buffer) < total_size:
-                        print("not enough data for full frame, breaking")
+                        #print("not enough data for full frame, breaking")
                         break  # not enough data for the full frame
 
                     frame_data = buffer[:total_size]
@@ -161,20 +162,20 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                     frame = parse_ws_frame(frame_data) # using what we made earlier to get frame object
                     # self.process_frame(frame) #check if final message opcode
                     if frame.opcode == 0x1 or frame.opcode == 0x2:
-                        print("current opcode", frame.opcode)
+                        #print("current opcode", frame.opcode)
                         current_opcode = frame.opcode  # set current opcode for new message
                     elif frame.opcode == 0x0 and current_opcode is not None:
                         pass 
                         
                     message_buffer.extend(frame.payload)
                     if frame.fin_bit == 1:  # this is the final piece
-                        print("processing complete message", username)
+                        #print("processing complete message", username)
                         self.process_complete_message(message_buffer, username)
                         current_opcode = None
                         message_buffer.clear()  # clear the message buffer for the next message
                         
                     if frame.opcode == 0x8:  # check if final message opcode and close if so
-                        print("closing connection")
+                        #print("closing connection")
                         self.close_connection()
                         return
                         # if fin_bit == 0 do nothing just continue to accumulate
@@ -190,13 +191,13 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             message_text = message.decode('utf-8')
             message_data = json.loads(message_text)
             
-            print("processing message text:", message_text)
+            #print("processing message text:", message_text)
         
-            print("complete message received:", message_data)
+            #print("complete message received:", message_data)
 
             # process the message based on its type
             if message_data.get('messageType') == 'chatMessage':
-                print("type is chat message")
+                #print("type is chat message")
                 self.handle_tcp_chat_message(message_data, username)
             else:
                 print("Received an unknown message type", message_data.get('messageType'))
@@ -207,7 +208,8 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             print(f"Error processing complete message: {e}")
 
     def handle_tcp_chat_message(self, message, username):
-        print("posting a message")
+        #print("posting a message")
+        self.update_user_list()
         try:
             message_text = self.escape_html(message.get('message'))
             id = str(chat_collection.count_documents({}) + 1)
@@ -228,8 +230,8 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                 'message': message_text,
                 'id': id
             }
-            print("broadcasting message")
-            print(broadcast_chat_message)
+            #print("broadcasting message")
+            #print(broadcast_chat_message)
             self.broadcast_message(json.dumps(broadcast_chat_message)) #send to everyone, including the sender
             
 
@@ -241,19 +243,18 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         message_frame = generate_ws_frame(bytes(message, 'utf-8'))
         print("broadcasting to ",len(active_connections),"active connections")
         print("active connections:", active_connections)
-        
         closed_connections = []
         
         for connection in active_connections:
             try:
                 if connection.request.fileno() != -1: # socket is still valid
-                    print("sending message", connection.client_address)
+                    #print("sending message", connection.client_address)
                     connection.request.sendall(message_frame)
                 else:
-                    print("socket already closed for", connection.client_address)
+                    #print("socket already closed for", connection.client_address)
                     closed_connections.append(connection)
             except Exception as e:
-                print(f"Failed to send message to {connection.client_address}: {e}")
+                #print(f"Failed to send message to {connection.client_address}: {e}")
                 closed_connections.append(connection)
         
         for conn in closed_connections:
@@ -272,7 +273,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         except Exception as e:
             print("error closing connection:", e)
         finally:
-            self.update_user_list('logout', self.username)
+            self.update_user_list()
             if self in active_connections:
                 active_connections.remove(self)
             print("closed websocket connection for", self.client_address)
@@ -704,7 +705,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
             # self.redirect_to_home()
             print("redirecting to home")
             self.username = username
-            self.update_user_list('login', username)
+            self.update_user_list()
             self.send_response(302, 'Success', additional_headers={'Location': '/', 'Set-Cookie': cookie_value})
             
             return
@@ -724,14 +725,21 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
         self.close_connection()
         self.redirect_to_home()
         
-    def update_user_list(self, action, username):
-        print("updating user list", action, username)
+    def update_user_list(self):
+        print("updating user list")
+        active_usernames = []
+        print("There are ", len(active_connections))
+        for conn in active_connections:
+            if hasattr(conn, 'username') and conn.username != "Guest":
+                print("logging user",conn.username)
+                active_usernames.append(conn.username)
         msg = {
             "messageType": "userListUpdate",
-            "action": action,
-            "username": username
+            "action": "update",
+            "users": active_usernames
         }
-        self.broadcast_message(json.dumps(msg))
+        message_json = json.dumps(msg)
+        self.broadcast_message(message_json) 
         
     def redirect_to_home(self):
         #print("redirecting to home")
@@ -779,7 +787,7 @@ class MyTCPHandler(socketserver.BaseRequestHandler):
                  # put the XSRF token into the HTML content
                 xsrf_token = getattr(request, 'xsrf_token', None)
                 if xsrf_token:
-                    print("adding xsrf token to page")
+                    #print("adding xsrf token to page")
                     content = content.replace('{{xsrf_token}}', str(xsrf_token))
                 
                 content = content.encode('utf-8')  # encode back to bytes
