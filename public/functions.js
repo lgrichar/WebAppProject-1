@@ -1,4 +1,4 @@
-const ws = false;
+const ws = true;
 let socket = null;
 
 function initWS() {
@@ -11,9 +11,26 @@ function initWS() {
         const messageType = message.messageType
         if(messageType === 'chatMessage'){
             addMessageToChat(message);
-        }else{
+        } else if (data.messageType === 'userListUpdate') {
+            updateUserList(data);
+        } else{
             // send message to WebRTC
             processMessageAsWebRTC(message, messageType);
+        }
+    }
+}
+
+function updateUserList(data) {
+    const userList = document.getElementById('user-list');
+    if (data.action === 'login') {
+        const userItem = document.createElement('li');
+        userItem.textContent = data.username;
+        userItem.id = 'user-' + data.username;
+        userList.appendChild(userItem);
+    } else if (data.action === 'logout') {
+        const userItem = document.getElementById('user-' + data.username);
+        if (userItem) {
+            userList.removeChild(userItem);
         }
     }
 }
@@ -51,21 +68,27 @@ function addMessageToChat(messageJSON) {
 }
 
 function sendChat() {
+    
     const chatTextBox = document.getElementById("chat-text-box");
     const message = chatTextBox.value;
     chatTextBox.value = "";
     const xsrfToken = document.getElementById('xsrf-token').value;
 
-    const request = new XMLHttpRequest();
-    request.onreadystatechange = function () {
-        if (this.readyState === 4 && this.status === 200) {
-            console.log(this.response);
+    if (!ws) {
+        const request = new XMLHttpRequest();
+        request.onreadystatechange = function () {
+            if (this.readyState === 4 && this.status === 200) {
+                console.log(this.response);
+            }
         }
+        const messageJSON = {"message": message, "xsrfToken": xsrfToken};
+        request.open("POST", "/chat-messages");
+        request.setRequestHeader('Content-Type', 'application/json');
+        request.send(JSON.stringify(messageJSON));
+    } else {
+        socket.send(JSON.stringify({'messageType': 'chatMessage',
+                                    'message': message}))
     }
-    const messageJSON = {"message": message, "xsrfToken": xsrfToken};
-    request.open("POST", "/chat-messages");
-    request.setRequestHeader('Content-Type', 'application/json');
-    request.send(JSON.stringify(messageJSON));
 }
 
 

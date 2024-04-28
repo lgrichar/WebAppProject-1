@@ -18,6 +18,9 @@ class WebSocketFrame:
                 f"payload_length={self.payload_length}, payload={self.payload})")
 
 def parse_ws_frame(frame):
+    if len(frame) < 2:
+        print("ERROR: Frame is less than 2 bytes in length")
+    
     print("frame recieved to parse:",frame)
     fin_bit = (frame[0] & 0x80) >> 7 # getting fin bit, AND mask and then change position
     opcode = frame[0] & 0x0F # 0001 for text, 0010 for binary, 1000 to close the connection, 0000 for continuation frame
@@ -25,40 +28,70 @@ def parse_ws_frame(frame):
     hasMask = (mask_bit == 1)
     payload_length = frame[1] & 0x7F # initial payload length, used to determine actual length
 
+    header_size = 2
+
     if payload_length == 126:
+        if len(frame) < 4:
+            print("ERROR: Length is less than 4")
         payload_length = int.from_bytes(frame[2:4], byteorder='big')
-        masking_key = frame[4:8]
-        payload_start = 8 # start at 8th byte position
+        #masking_key = frame[4:8]
+        #payload_start = 8 # start at 8th byte position
+        header_size += 2
     elif payload_length == 127:
+        if len(frame) < 10:
+            print("ERROR: Length is less than 10")
         payload_length = int.from_bytes(frame[2:10], byteorder='big')
-        masking_key = frame[10:14]
-        payload_start = 14
+        #masking_key = frame[10:14]
+        #payload_start = 14
+        header_size += 8
+        
+    if hasMask:
+        if len(frame) < header_size + 4:
+            print("ERROR: incomplete masking key")
+        masking_key = frame[header_size:header_size + 4]
+        print("mask found")
+        header_size += 4
     else:
-        masking_key = frame[2:6]
-        payload_start = 6
+        masking_key = None
 
-    decoded_payload = bytearray()
+    print("payload length:", payload_length)
+    print("header size", header_size)
+    total_frame_size = header_size + payload_length
+    if len(frame) < total_frame_size:
+        print("ERROR: incomplete frame data")
+        print("length of recieved frame is ", len(frame))
+        print("length of total frame", total_frame_size)
+
     
-    for i in range(payload_start, payload_start + payload_length):
-        # need to do them byte by byte, not in groups of 4 since it can give oob error
-        print("i =", i)
-        print("start =", payload_start)
-        print("end =", (payload_start + payload_length))
-        mask_index = (i - payload_start) % 4
-        print("mask index", mask_index)
-
-        byte_from_frame = frame[i]
-        mask_byte = masking_key[mask_index]
-
-        decoded_byte = byte_from_frame ^ mask_byte
-
-        decoded_payload.append(decoded_byte)
+    payload_start = header_size
+    
+    if hasMask:
+        decoded_payload = bytearray()
+        for i in range(payload_length):
+            print("i =", i)
+            print("start =", payload_start)
+            print("end =", (payload_start + payload_length))
+            frame_index = payload_start + i
+            mask_index = i % 4
+            # need to do them byte by byte, not in groups of 4 since it can give oob error
+            print("mask index", mask_index)
+            decoded_byte = frame[frame_index] ^ masking_key[mask_index]
+            decoded_payload.append(decoded_byte)
+    else:
+        decoded_payload = frame[payload_start:payload_start + payload_length]
 
     return WebSocketFrame(fin_bit, opcode, payload_length, decoded_payload)
 
-def generate_ws_frame(data):
+def generate_ws_frame(data, opcode="0x81"):
     frame = bytearray()
-    frame.append(0x81)  # bx10000001
+
+    if opcode == "0x81":  # text frame
+        frame.append(0x81)  # bx10000001
+    elif opcode == "0x8":  # close frame
+        frame.append(0x88)  # bx10001000
+    else:
+        frame.append(int(opcode, 16))
+    
     print("data length", len(data))
     if len(data) < 126:
         print("small data", data)
